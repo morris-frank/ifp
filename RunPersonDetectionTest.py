@@ -18,7 +18,7 @@ maxsize = 200
 import sys, getopt
 sys.path.insert(0, caffe_root + 'python')
 
-import os
+import os.path
 import glob
 import warnings
 
@@ -36,6 +36,21 @@ import matplotlib.pyplot as plt
 import assets
 
 def run_persondetectiontest(inputdir, outputdir, gpudevice):
+
+    if not os.path.exists(results_root + outputdir + inputdir):
+        os.makedirs(results_root + outputdir + inputdir)
+    else:
+        warnings.warn('The result directory already exists!', RuntimeWarning)
+
+    filelist  = [os.path.basename(os.path.normpath(x)) for x in glob.glob(data_root + inputdir + '*' + image_typ)]
+    done_list = [os.path.basename(os.path.normpath(x)) for x in glob.glob(results_root + inputdir + '*')]
+    filelist  = list(set(filelist) - set(done_list))
+    filelist  = np.sort(filelist)
+
+    if len(filelist) == 0:
+        print "filelist was empty"
+        return
+
     if gpudevice >=0:
         #Do you have GPU device?
         has_gpu = 1
@@ -49,8 +64,8 @@ def run_persondetectiontest(inputdir, outputdir, gpudevice):
         caffe.set_mode_gpu()
         net = caffe.Segmenter(MODEL_FILE, PRETRAINED,True)
     else:
-        caffe.set_mode_cpu()
-        net = caffe.Segmenter(MODEL_FILE, PRETRAINED,False)
+        print 'We wanna use a GPU, is not given, ya know.'
+        sys.exit(2)
 
     net.blobs['data'].reshape(1, 3, maxsize, maxsize)
     net.reshape()
@@ -63,14 +78,6 @@ def run_persondetectiontest(inputdir, outputdir, gpudevice):
     transformer.set_mean('data', mean_file) #### subtract mean ####
     transformer.set_raw_scale('data', 255) # pixel value range
     transformer.set_channel_swap('data', (2,1,0)) # RGB -> BGR
-
-    if not os.path.exists(results_root + outputdir + inputdir):
-        os.makedirs(results_root + outputdir + inputdir)
-    else:
-        warnings.warn('The result directory already exists!', RuntimeWarning)
-
-    filelist = [os.path.basename(x) for x in glob.glob(data_root + inputdir + '*' + image_typ)]
-    filelist = np.sort(filelist)
 
     for filename in filelist:
         print filename
@@ -87,13 +94,14 @@ def run_persondetectiontest(inputdir, outputdir, gpudevice):
         cur_h, cur_w, cur_c = im.shape
         pad_h = maxsize - cur_h
         pad_w = maxsize - cur_w
+        if pad_w < 0 or pad_h < 0:
+            continue
         im = np.pad(im, pad_width=((0, pad_h), (0, pad_w), (0, 0)), mode = 'constant', constant_values = 0)
 
-        #net.blobs['data'].data[...] = transformer.preprocess('data', im)
+        net.blobs['data'].data[...] = transformer.preprocess('data', im)
         # Get predictions
         segmentation = net.forward()
         #segmentation = net.predict([im])
-
 
         segmentation2 = segmentation['pred'][0, 15, 0:cur_h, 0:cur_w]
         #segmentation2 = segmentation[0, 15, 0:cur_h, 0:cur_w]
