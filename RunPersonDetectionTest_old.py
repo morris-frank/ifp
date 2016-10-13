@@ -5,39 +5,71 @@ model_root   = '../../model/'
 data_root    = '../../data/'
 results_root = '../../results/'
 
-MODEL_FILE = model_root + 'TVG_CRFRNN_new_deploy.prototxt'
+MODEL_FILE = model_root + 'TVG_CRFRNN_new_deploy_unary.prototxt'
 PRETRAINED = model_root + 'TVG_CRFRNN_COCO_VOC.caffemodel'
 
+image_typ = 'png'
 
 person_palette = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                   255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 
-maxsize = 200
+maxsize = 500
 
 import sys, getopt
 sys.path.insert(0, caffe_root + 'python')
 
+import os.path
+import glob
+import warnings
+
+import caffe
+import numpy as np
+
 # To save images without having a DISPLAY
 import matplotlib as mpl
 mpl.use('Agg')
-
-import os
-import cPickle
-import logging
-import numpy as np
-import pandas as pd
 from PIL import Image as PILImage
-#import Image
-import cStringIO as StringIO
-import caffe
+from scipy.misc import imsave
 import matplotlib.pyplot as plt
-from scipy.misc import imread
-import warnings
 
 # Import helper functions
 import assets
 
+
+def getpallete(num_cls):
+        # this function is to get the colormap for visualizing the segmentation mask
+        n = num_cls
+        pallete = [0]*(n*3)
+        for j in xrange(0,n):
+                lab = j
+                pallete[j*3+0] = 0
+                pallete[j*3+1] = 0
+                pallete[j*3+2] = 0
+                i = 0
+                while (lab > 0):
+                        pallete[j*3+0] |= (((lab >> 0) & 1) << (7-i))
+                        pallete[j*3+1] |= (((lab >> 1) & 1) << (7-i))
+                        pallete[j*3+2] |= (((lab >> 2) & 1) << (7-i))
+                        i = i + 1
+                        lab >>= 3
+        return pallete
+
 def run_persondetectiontest(inputdir, outputdir, gpudevice):
+
+    if not os.path.exists(results_root + outputdir + inputdir):
+        os.makedirs(results_root + outputdir + inputdir)
+    else:
+        warnings.warn('The result directory already exists!', RuntimeWarning)
+
+    filelist  = [os.path.basename(os.path.normpath(x)) for x in glob.glob(data_root + inputdir + '*' + image_typ)]
+    done_list = [os.path.basename(os.path.normpath(x)) for x in glob.glob(results_root + inputdir + '*')]
+    filelist  = list(set(filelist) - set(done_list))
+    filelist  = np.sort(filelist)
+
+    if len(filelist) == 0:
+        print "filelist was empty"
+        return
+
     if gpudevice >=0:
         #Do you have GPU device?
         has_gpu = 1
@@ -51,81 +83,82 @@ def run_persondetectiontest(inputdir, outputdir, gpudevice):
         caffe.set_mode_gpu()
         net = caffe.Segmenter(MODEL_FILE, PRETRAINED,True)
     else:
-        caffe.set_mode_cpu()
-        net = caffe.Segmenter(MODEL_FILE, PRETRAINED,False)
+        print 'We wanna use a GPU, is not given, ya know.'
+        sys.exit(2)
 
     net.blobs['data'].reshape(1, 3, maxsize, maxsize)
     net.reshape()
 
-    if not os.path.exists(data_root + patch_root + inputdir):
-        os.makedirs(data_root + patch_root + inputdir)
-    else:
-        warnings.warn('The patch directory already exists!', RuntimeWarning)
+    print net.blobs['data'].data.shape
 
-    for filename in os.listdir(data_root + inputdir):
-        if filename.endswith(".jpg") or filename.endswith(".png"):
-            input_image = 255 * caffe.io.load_image(data_root + inputdir + filename)
+    transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
+    transformer.set_transpose('data', (2,0,1)) # height*width*channel -> channel*height*width
+    mean_file = np.array([104,117,123])
+    transformer.set_mean('data', mean_file) #### subtract mean ####
+    transformer.set_raw_scale('data', 255) # pixel value range
+    transformer.set_channel_swap('data', (2,1,0)) # RGB -> BGR
 
-            width = input_image.shape[0]
-            height = input_image.shape[1]
-            maxDim = max(width,height)
+    for filename in filelist:
+        print filename
+        input_image = caffe.io.load_image(data_root + inputdir + filename)
 
-            image = PILImage.fromarray(np.uint8(input_image))
+        width = input_image.shape[0]
+        height = input_image.shape[1]
+        maxDim = max(width,height)
 
-            if width > maxsize or height > maxsize:
-                refSize = maxsize, maxsize
-                image.thumbnail(refSize, PILImage.ANTIALIAS)
+        im = PILImage.fromarray(np.uint8(input_image))
+        im = np.array(im)
 
-            image = np.array(image)
-
-            mean_vec = np.array([103.939, 116.779, 123.68], dtype=np.float32)
-            reshaped_mean_vec = mean_vec.reshape(1, 1, 3);
-
-            # Rearrange channels to form BGR
-            im = image[:,:,::-1]
-            # Subtract mean
-            im = im - reshaped_mean_vec
-
-            # Pad as necessary
-            cur_h, cur_w, cur_c = im.shape
-            pad_h = maxsize - cur_h
-            pad_w = maxsize - cur_w
-            im = np.pad(im, pad_width=((0, pad_h), (0, pad_w), (0, 0)), mode = 'constant', constant_values = 0)
-            # Get predictions
-            segmentation = net.predict([im])
-
-            segmentation2 = segmentation[0:cur_h, 0:cur_w]
-            output_im = PILImage.fromarray(segmentation2)
-            output_im.putpalette(person_palette)
-
-            imsave(results_root + outputdir + inputdir + filename, output_im)
-
-        else:
+        # Pad as necessary
+        cur_h, cur_w, cur_c = im.shape
+        pad_h = maxsize - cur_h
+        pad_w = maxsize - cur_w
+        if pad_w < 0 or pad_h < 0:
             continue
+        im = np.pad(im, pad_width=((0, pad_h), (0, pad_w), (0, 0)), mode = 'constant', constant_values = 0)
+
+        # Get predictions
+        ##Forward way
+        #net.blobs['data'].data[...] = transformer.preprocess('data', im)
+        #segmentation = net.forward()
+        #output_im = segmentation['pred'][0, 15, 0:cur_h, 0:cur_w]
+        ##segmentation2 = segmentation[0:cur_h, 0:cur_w]
+
+        ##Predict way
+        pallete = getpallete(256)
+        segmentation = net.predict([im])
+        segmentation2 = segmentation[0:cur_h, 0:cur_w]
+        segmentation2.shape
+        output_im = PILImage.fromarray(segmentation2)
+        output_im.putpalette(pallete)
+
+        imsave(results_root + outputdir + inputdir + filename, output_im)
+
 
 def main(argv):
-   inputdir = 'OlympicSports/patches/high_jump/bvV-s0nZjgI_05042_05264/'
-   outputdir = ''
-   gpu_device = 0
-   try:
-      opts, args = getopt.getopt(argv,"hi:o:",["idir=","odir="])
-   except getopt.GetoptError:
-      print 'crfasrnn_demo.py -i <inputdir> -o <outputdir> -gpu <gpu_device>'
-      sys.exit(2)
-   for opt, arg in opts:
-      if opt == '-h':
-         print 'crfasrnn_demo.py -i <inputdir> -o <outputdir> -gpu <gpu_device>'
-         sys.exit()
-      elif opt in ("-i", "--idir"):
-         inputdir = arg
-      elif opt in ("-o", "--odir"):
-         outputdir = arg
-      elif opt in ("-gpu", "--gpudevice"):
-         gpu_device = arg
-   print 'Input directory is "', inputdir
-   print 'Output directory is "', outputdir
-   print 'GPU_DEVICE is "', gpu_device
-   run_persondetectiontest(inputdir,outputdir,gpu_device)
+    #inputdir = 'OlympicSports/patches/high_jump/bvV-s0nZjgI_05042_05264/'
+    inputdir = 'test/'
+    outputdir = ''
+    gpu_device = 1
+    try:
+        opts, args = getopt.getopt(argv,"hi:o:",["idir=","odir="])
+    except getopt.GetoptError:
+        print 'crfasrnn_demo.py -i <inputdir> -o <outputdir> -gpu <gpu_device>'
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print 'crfasrnn_demo.py -i <inputdir> -o <outputdir> -gpu <gpu_device>'
+            sys.exit()
+        elif opt in ("-i", "--idir"):
+            inputdir = arg
+        elif opt in ("-o", "--odir"):
+            outputdir = arg
+        elif opt in ("-gpu", "--gpudevice"):
+            gpu_device = arg
+    print 'Input directory is "', inputdir
+    print 'Output directory is "', outputdir
+    print 'GPU_DEVICE is "', gpu_device
+    run_persondetectiontest(inputdir,outputdir,gpu_device)
 
 
 if __name__ == "__main__":

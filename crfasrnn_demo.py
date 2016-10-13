@@ -17,9 +17,6 @@ caffe_root = '../caffe/'
 import sys, getopt
 sys.path.insert(0, caffe_root + 'python')
 
-import matplotlib as mpl
-mpl.use('Agg')
-
 import os
 import cPickle
 import logging
@@ -29,7 +26,11 @@ from PIL import Image as PILImage
 #import Image
 import cStringIO as StringIO
 import caffe
+# To save images without having a DISPLAY
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
+from scipy.misc import imsave
 
 
 def tic():
@@ -47,9 +48,29 @@ def toc():
         print "Toc: start time not set"
 
 
+def getpallete(num_cls):
+        # this function is to get the colormap for visualizing the segmentation mask
+        n = num_cls
+        pallete = [0]*(n*3)
+        for j in xrange(0,n):
+                lab = j
+                pallete[j*3+0] = 0
+                pallete[j*3+1] = 0
+                pallete[j*3+2] = 0
+                i = 0
+                while (lab > 0):
+                        pallete[j*3+0] |= (((lab >> 0) & 1) << (7-i))
+                        pallete[j*3+1] |= (((lab >> 1) & 1) << (7-i))
+                        pallete[j*3+2] |= (((lab >> 2) & 1) << (7-i))
+                        i = i + 1
+                        lab >>= 3
+        return pallete
+
+
+
 def run_crfasrnn(inputfile, outputfile, gpudevice):
-    MODEL_FILE = 'TVG_CRFRNN_new_deploy.prototxt'
-    PRETRAINED = 'TVG_CRFRNN_COCO_VOC.caffemodel'
+    MODEL_FILE = '../../model/TVG_CRFRNN_new_deploy_unary.prototxt'
+    PRETRAINED = '../../model/TVG_CRFRNN_COCO_VOC.caffemodel'
     IMAGE_FILE = inputfile
 
     if gpudevice >=0:
@@ -84,34 +105,7 @@ def run_crfasrnn(inputfile, outputfile, gpudevice):
     image = PILImage.fromarray(np.uint8(input_image))
     image = np.array(image)
 
-    pallete = [0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            192,128,128,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0,
-            0,0,0]
+    pallete = getpallete(256)
 
     mean_vec = np.array([103.939, 116.779, 123.68], dtype=np.float32)
     reshaped_mean_vec = mean_vec.reshape(1, 1, 3);
@@ -123,8 +117,8 @@ def run_crfasrnn(inputfile, outputfile, gpudevice):
 
     # Pad as necessary
     cur_h, cur_w, cur_c = im.shape
-    pad_h = 500 - cur_h
-    pad_w = 500 - cur_w
+    pad_h = 200 - cur_h
+    pad_w = 200 - cur_w
     im = np.pad(im, pad_width=((0, pad_h), (0, pad_w), (0, 0)), mode = 'constant', constant_values = 0)
     # Get predictions
     segmentation = net.predict([im])
@@ -132,13 +126,12 @@ def run_crfasrnn(inputfile, outputfile, gpudevice):
     output_im = PILImage.fromarray(segmentation2)
     output_im.putpalette(pallete)
 
-    plt.imshow(output_im)
-    plt.savefig(outputfile)
+    imsave(outputfile, output_im)
 
 
 def main(argv):
-   inputfile = 'input.jpg'
-   outputfile = 'output.png'
+   inputfile = '../../data/test/I00189.png'
+   outputfile = '../../results/test/I00189.png'
    gpu_device = 0
    try:
       opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])

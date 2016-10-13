@@ -32,7 +32,9 @@ def applypatches(inputdir, bbfile):
     bbmat       = np.loadtxt(data_root + bb_root + bbfile, dtype = col_dtypes)
 
     #Get file list
-    filelist = [os.path.basename(x) for x in glob.glob(results_root + patch_root + inputdir + '*' + image_typ)]
+    filelist = [os.path.basename(os.path.normpath(x)) for x in glob.glob(results_root + patch_root + inputdir + '*' + image_typ)]
+    done_list = [os.path.basename(os.path.normpath(x)) for x in glob.glob(results_root + patched_image_root + inputdir + '*png')]
+    filelist  = list(set(filelist) - set(done_list))
     filelist = np.sort(filelist)
 
     if not os.path.exists(results_root + patched_image_root + inputdir):
@@ -51,10 +53,18 @@ def applypatches(inputdir, bbfile):
         #Get bounding box
         idx = filter(lambda x: x.isdigit(), imf)
         idx = int(idx)
-        bb = bbmat[idx]
+        try:
+            bb = bbmat[idx]
+        except Exception:
+            warnings.warn('More patches than bboxes', RuntimeWarning)
+            continue
 
         #overlay[bb[2]:bb[4], bb[1]:bb[3], :] = 255-patch[:,:,np.newaxis]
-        overlay[bb[2]:bb[4], bb[1]:bb[3]] = patch[:,:]
+        try:
+            overlay[bb[2]:bb[4], bb[1]:bb[3]] = patch[:,:]
+        except Exception:
+            warnings.warn('patch not same size as in bb file', RuntimeWarning)
+            continue
 
         #Save patch
         #imsave(results_root + patched_image_root + inputdir + imf[:-len(image_typ)] + 'png', overlay)

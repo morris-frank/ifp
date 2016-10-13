@@ -2,8 +2,8 @@ name: "CRFRNN-VOC"
 input: 'data'
 input_dim: 1
 input_dim: 3
-input_dim: 200
-input_dim: 200
+input_dim: 227
+input_dim: 227
 force_backward: true
 
 layer {

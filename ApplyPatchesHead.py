@@ -15,8 +15,8 @@ import ApplyPatches
 
 
 def main(argv):
-    sportslist = [basename(normpath(x)) for x in glob.glob(data_root + data_rel + '*')]
-
+    #sportslist = [basename(normpath(x)) for x in glob.glob(data_root + data_rel + '*')]
+    sportslist = ['long_jump']
     for sport in sportslist:
         print "--------" + sport + "--------"
         vidlist = [basename(normpath(x)) for x in glob.glob(data_root + data_rel + sport + '/*')]
