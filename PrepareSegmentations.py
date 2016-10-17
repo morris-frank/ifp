@@ -7,10 +7,12 @@ results_root = '../../results/'
 framedir = data_root + 'OlympicSports/clips/'
 patchdir = results_root + 'OlympicSports/patches/'
 bbdir = data_root + 'OlympicSports/bboxes/'
+segdir = results_root + 'OlympicSports/segmentations/'
 
 image_typ = 'png'
 
-THRES = 150
+THRES        = 150
+IGNORE_VALUE = -1
 
 import sys, getopt
 sys.path.insert(0, caffe_root + 'python')
@@ -26,33 +28,33 @@ import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
 from PIL import Image as PILImage
-from scipy.misc import imsave, imresize, imread
+from scipy.misc import imresize, imread
 import scipy.io
 import matplotlib.pyplot as plt
 
 
 def prepare_segmentation(subpath, bbpos, cliquenum):
-    frame = imread(framedir + subpath)
-    segmentation = np.zeros((frame.shape[0], frame.shape[1]))
+    frame = imread(framedir + subpath[:-3] + 'jpg')
+
+    #Create segmentation image filled with ignore values
+    segmentation = np.full((frame.shape[0], frame.shape[1]), IGNORE_VALUE, dtype=np.int16)
 
     #Read patch from crfasrnn
     patchseg = imread(patchdir + subpath)
     #Threshold with global threshold
-    patchseg = patchseg > THRES
+    patchseg = (patchseg > THRES).astype(np.int16, copy=False)
     #Fill segmentation with number of current clique
-    patchseg = cliquenum * patchseg
+    patchseg[patchseg == True] = cliquenum
 
     try:
         segmentation[bbpos[2]:bbpos[4], bbpos[1]:bbpos[3]] = patchseg[:,:]
     except Exception:
         warnings.warn('patch not same size as in bb file', RuntimeWarning)
-        continue
 
-    #Fill not-segment with ignore value
-    segmentation[segmentation == ] = -1
+    if not os.path.exists(segdir + subpath[:-10]):
+        os.makedirs(segdir + subpath[:-10])
 
-    print bbpos
-    print '----------------'
+    np.save(segdir + subpath[:-4], segmentation)
 
 
 def prepare_segmentations(cliquefile, bbfiles):
@@ -77,13 +79,12 @@ def prepare_segmentations(cliquefile, bbfiles):
         bbmats[bbbase] = np.loadtxt(bbdir + bbfiles + bbfile, dtype = col_dtypes)
         patchlists[bbbase] = [os.path.basename(os.path.normpath(x)) for x in glob.glob(patchdir + bbfiles + bbbase + '/*png')]
 
-
     for n in range(0,N):
         cliquepatchpaths = cliquemat[0,n]
+        print n
         for patchpath in cliquepatchpaths:
             patchpath = patchpath.split('/crops/',1)[1]
             video = patchpath.split('/')[1]
-            print video
             idx = patchlists[video].index(patchpath[-10:])
             bbpos = bbmats[video][idx]
             prepare_segmentation(patchpath, bbpos, n)
