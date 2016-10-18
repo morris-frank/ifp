@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-caffe_root   = '../../lib/crfasrnn/caffe/'
 data_root    = '../../data/'
 results_root = '../../results/'
 
@@ -15,8 +14,6 @@ THRES        = 150
 IGNORE_VALUE = -1
 
 import sys, getopt
-sys.path.insert(0, caffe_root + 'python')
-
 import os.path
 import glob
 import warnings
