@@ -2,7 +2,6 @@
 
 
 ##CONFIGURATION
-caffe_root  = '../../lib/crfasrnn/caffe/'
 data_root   = '../../data/OlympicSports/'
 results_root   = '../../results/OlympicSports/'
 image_root  = 'clips/'
@@ -15,8 +14,6 @@ orig_typ  = 'jpg'
 ##
 
 import sys, getopt
-sys.path.insert(0, caffe_root + 'python')
-
 import warnings
 import os
 import numpy as np
