@@ -116,21 +116,7 @@ def main(argv):
     inputdir = 'test/'
     outputdir = ''
     gpu_device = 0
-    try:
-        opts, args = getopt.getopt(argv,"hi:o:",["idir=","odir="])
-    except getopt.GetoptError:
-        print 'crfasrnn_demo.py -i <inputdir> -o <outputdir> -gpu <gpu_device>'
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print 'crfasrnn_demo.py -i <inputdir> -o <outputdir> -gpu <gpu_device>'
-            sys.exit()
-        elif opt in ("-i", "--idir"):
-            inputdir = arg
-        elif opt in ("-o", "--odir"):
-            outputdir = arg
-        elif opt in ("-gpu", "--gpudevice"):
-            gpu_device = arg
+
     print 'Input directory is "', inputdir
     print 'Output directory is "', outputdir
     print 'GPU_DEVICE is "', gpu_device
