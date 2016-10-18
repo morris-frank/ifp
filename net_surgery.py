@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 def perform_surgery(inp_proto, inp_model, fcn_proto, fcn_model):
     # Load the original network and extract the fully connected layers' parameters.
-    net = caffe.Net(inp_proto, inp_model, caffe.TEST)
+    net = caffe.Net(inp_proto, inp_model, caffe.TRAIN)
     params = ['fc6', 'fc7_', 'fc8_output']
 
     #net.blobs['data'].reshape(1, 3, 67, 67)
@@ -60,10 +60,10 @@ def main(argv):
     sport = 'long_jump'
 
     inp_proto = model_root + 'snapshots/' + sport + '/net_config/deploy.prototxt'
-    fcn_proto = './fcn/' + sport + '/deploy.prototxt'
+    fcn_proto = './fcn/' + sport + '/train_test.prototxt'
 
     inp_model = model_root + 'snapshots/' + sport + '/snap_iter_30000.caffemodel'
-    fcn_model = model_root + 'fcn/' + sport + '/snap_iter_30000.caffemodel'
+    fcn_model = model_root + 'fcn/' + sport + '/snap_iter_30000.train.caffemodel'
 
     perform_surgery(inp_proto, inp_model, fcn_proto, fcn_model)
 

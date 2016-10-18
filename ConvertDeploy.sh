@@ -22,6 +22,7 @@ done
 
 sed -e "s/InnerProduct/Convolution/g" -i.bak $2
 sed -e "s/inner_product_param/convolution_param/g" -i.bak $2
+#sed -e "s/dim: 227/dim: 67/g" -i.bak $2
 awk '{print; if (NR==257) print "    kernel_size: 6";}' $2 > $2.bak && mv $2.bak $2
 awk '{print; if (NR==300) print "    kernel_size: 1";}' $2 > $2.bak && mv $2.bak $2
 awk '{print; if (NR==343) print "    kernel_size: 1";}' $2 > $2.bak && mv $2.bak $2

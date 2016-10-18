@@ -28,7 +28,7 @@ import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
 from PIL import Image as PILImage
-from scipy.misc import imsave, imresize imread
+from scipy.misc import imsave, imresize
 import matplotlib.pyplot as plt
 
 # Import helper functions
