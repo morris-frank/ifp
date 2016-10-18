@@ -1,5 +1,5 @@
 
-caffe_root   = '../../lib/crfasrnn/caffe/'
+caffe_root   = '../../lib/caffe/'
 model_root   = '../../model/'
 data_root    = '../../data/'
 results_root = '../../results/'
