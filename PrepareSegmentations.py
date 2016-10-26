@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-data_root    = '../../data/'
+data_root = '../../data/'
 results_root = '../../results/'
 
 framedir = data_root + 'OlympicSports/clips/'
@@ -10,10 +10,11 @@ segdir = results_root + 'OlympicSports/segmentations/'
 
 image_typ = 'png'
 
-THRES        = 150
+THRES = 150
 IGNORE_VALUE = -1
 
-import sys, getopt
+import sys
+import getopt
 import os.path
 import glob
 import warnings
@@ -33,18 +34,19 @@ import matplotlib.pyplot as plt
 def prepare_segmentation(subpath, bbpos, cliquenum):
     frame = imread(framedir + subpath[:-3] + 'jpg')
 
-    #Create segmentation image filled with ignore values
-    segmentation = np.full((frame.shape[0], frame.shape[1]), IGNORE_VALUE, dtype=np.int16)
+    # Create segmentation image filled with ignore values
+    segmentation = np.full(
+        (frame.shape[0], frame.shape[1]), IGNORE_VALUE, dtype=np.int16)
 
-    #Read patch from crfasrnn
+    # Read patch from crfasrnn
     patchseg = imread(patchdir + subpath)
-    #Threshold with global threshold
+    # Threshold with global threshold
     patchseg = (patchseg > THRES).astype(np.int16, copy=False)
-    #Fill segmentation with number of current clique
+    # Fill segmentation with number of current clique
     patchseg[patchseg == True] = cliquenum
 
     try:
-        segmentation[bbpos[2]:bbpos[4], bbpos[1]:bbpos[3]] = patchseg[:,:]
+        segmentation[bbpos[2]:bbpos[4], bbpos[1]:bbpos[3]] = patchseg[:, :]
     except Exception:
         warnings.warn('patch not same size as in bb file', RuntimeWarning)
 
@@ -55,32 +57,35 @@ def prepare_segmentation(subpath, bbpos, cliquenum):
 
 
 def prepare_segmentations(cliquefile, bbfiles):
-    ## LOAD CLIQUES FILE
+    # LOAD CLIQUES FILE
     if not os.path.isfile(cliquefile):
         print "Cliquefile is not good, -.-"
         return
 
     cliquemat = scipy.io.loadmat(cliquefile)
     cliquemat = cliquemat['class_images']
-    #Count of cliques:
+    # Count of cliques:
     N = cliquemat.shape[1]
 
-    ##LOAD BB FILES
-    col_dtypes  = np.dtype([('frame', 'uint16'), ('top', 'uint16'), ('left', 'uint16'), ('width', 'uint16'), ('height', 'uint16')])
-    bbfilelist = [os.path.basename(os.path.normpath(x)) for x in glob.glob(bbdir + bbfiles + '*bb')]
+    # LOAD BB FILES
+    col_dtypes = np.dtype([('frame', 'uint16'), ('top', 'uint16'),
+                           ('left', 'uint16'), ('width', 'uint16'), ('height', 'uint16')])
+    bbfilelist = [os.path.basename(os.path.normpath(x))
+                  for x in glob.glob(bbdir + bbfiles + '*bb')]
     bbmats = dict()
     patchlists = dict()
     for bbfile in bbfilelist:
-        #Filename without extension
+        # Filename without extension
         bbbase = bbfile[:-3]
-        bbmats[bbbase] = np.loadtxt(bbdir + bbfiles + bbfile, dtype = col_dtypes)
-        patchlists[bbbase] = [os.path.basename(os.path.normpath(x)) for x in glob.glob(patchdir + bbfiles + bbbase + '/*png')]
+        bbmats[bbbase] = np.loadtxt(bbdir + bbfiles + bbfile, dtype=col_dtypes)
+        patchlists[bbbase] = [os.path.basename(os.path.normpath(
+            x)) for x in glob.glob(patchdir + bbfiles + bbbase + '/*png')]
 
-    for n in range(0,N):
-        cliquepatchpaths = cliquemat[0,n]
+    for n in range(0, N):
+        cliquepatchpaths = cliquemat[0, n]
         print n
         for patchpath in cliquepatchpaths:
-            patchpath = patchpath.split('/crops/',1)[1]
+            patchpath = patchpath.split('/crops/', 1)[1]
             video = patchpath.split('/')[1]
             idx = patchlists[video].index(patchpath[-10:])
             bbpos = bbmats[video][idx]

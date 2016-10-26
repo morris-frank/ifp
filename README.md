@@ -1,6 +1,7 @@
 # ifp
 My Files for my advanced practical at the HCI in Heidelberg
 
+Now with atom.io
 
 ## Files
 
@@ -16,4 +17,4 @@ My Files for my advanced practical at the HCI in Heidelberg
 | net_surgery.py                | Converts a snapshot from NIPS to a FCN deploy |
 | PrepareSegmentations.py       | Reads through a leveldb of cliques and thresholds all patches and fills the resized segmentations accordingly |
 | RunPersonDetectionTest.py     | Runs directory through crf-rnn to detect persons and saves the heatmaps |
-| RunPersonDetectionTestHead.py | Runs RunPersonDetectionTest.py recursively for all folders | 
+| RunPersonDetectionTestHead.py | Runs RunPersonDetectionTest.py recursively for all folders |
