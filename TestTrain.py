@@ -38,5 +38,5 @@ solver.net.copy_from(weights)
 interp_layers = [k for k in solver.net.params.keys() if 'deconv' in k]
 surgery.interp(solver.net, interp_layers)
 
-# for _ in range(25):
-#    solver.step(4000)
+for _ in range(25):
+    solver.step(4000)

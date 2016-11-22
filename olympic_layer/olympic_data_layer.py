@@ -4,14 +4,15 @@ from glob import glob
 import random
 from PIL import Image
 from os.path import normpath, basename
+from scipy.misc import imresize
+from DownsampleSegmentations import downsample_segmentation
 
 
 class OlympicDataLayer(caffe.Layer):
-    """
-
-    self.label_dir = ""
-    self.data_dir = ""
-    """
+    im_factor = 1.0
+    label_factor = 0.25
+    im_head = '/export/home/mfrank/data/OlympicSports/clips/'
+    label_head = '/export/home/mfrank/results/OlympicSports/segmentations/'
 
     def setup(self, bottom, top):
         print 'Setting up the OlympicDataLayer...'
@@ -20,8 +21,7 @@ class OlympicDataLayer(caffe.Layer):
 
         # config
         params = eval(self.param_str)
-        self.data_dir = params['data_dir']
-        self.label_dir = params['label_dir']
+        self.path_file = params['path_file']
         self.mean = np.array(params['mean'])
         self.random = params.get('randomize', False)
         self.seed = params.get('seed', None)
@@ -35,16 +35,17 @@ class OlympicDataLayer(caffe.Layer):
         if len(bottom) != 0:
             raise Exception("Do not define a bottom.")
 
+        self.paths = open(self.path_file, 'r').read().splitlines()
         self.idx = 0
-        # Get all segmentations available without the extension
-        self.paths = [basename(normpath(x))[:-3]
-                      for x in glob(self.label_dir + '*' + self.label_ext)]
-        self.paths = np.sort(self.paths)
 
     def reshape(self, bottom, top):
         # load image + label image pair
         self.data = self.load_image(self.paths[self.idx])
         self.label = self.load_label(self.paths[self.idx])
+
+        if np.min([self.data.shape[1], self.data.shape[2]]) < 340:
+            self.data = imresize(self.data, 2.0).transpose((2, 0, 1))
+            self.label = self.label.repeat(2, axis=1).repeat(2, axis=2)
 
         # reshape tops to fit (leading 1 is for batch dimension)
         top[0].reshape(1, *self.data.shape)
@@ -66,7 +67,7 @@ class OlympicDataLayer(caffe.Layer):
     def backward(self, top, propagate_down, bottom):
         pass
 
-    def load_image(self, name):
+    def load_image(self, path):
         """
         Load input image and preprocess for Caffe:
         - cast to float
@@ -74,14 +75,20 @@ class OlympicDataLayer(caffe.Layer):
         - subtract mean
         - transpose to channel x height x width order
         """
-        im = Image.open(self.data_dir + name + self.data_ext)
-        in_ = np.array(im, dtype=np.float32)
+        im = Image.open(self.im_head + path + self.data_ext)
+        if self.im_factor == 1:
+            in_ = im
+        else:
+            in_ = imresize(im, self.im_factor)
+        in_ = np.array(in_, dtype=np.float32)
         in_ = in_[:, :, ::-1]
         in_ -= self.mean
         in_ = in_.transpose((2, 0, 1))
         return in_
 
-    def load_label(self, name):
-        label = np.load(self.label_dir + name +
-                        self.label_ext)  # .astype('uin16')
+    def load_label(self, path):
+        label = np.load(self.label_head + path + self.label_ext)  # .astype('uin16')
+        if self.label_factor != 1:
+            label = downsample_segmentation(label, int(1/self.label_factor))
+        label = label[np.newaxis, ...]
         return label
