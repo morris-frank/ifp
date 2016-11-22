@@ -11,6 +11,7 @@ Now with atom.io
 | ApplyPatches.py               | Puts the patches from one folder and with their bounding box file onto the images from another folder |
 | ApplyPatchesHead.py           | Runs ApplyPatches.py recursively for all folders |
 | ConvertDeploy.sh              | Converts the deploy.prototxt from the NIPS snapshots into the used FCN form |
+| DownsampleSegmentations.py    | Provides function to sum-max downsample ground truths and can be applied to folders |
 | ExtractPatches.py             | Extracts the patches from the original frames with a given bounding box file |
 | ExtractPatchesHead.py         | Runs ExtractPatches.py recursively for all folders |
 | FCNTest.py                    | Runs all images from a folder through a FCN ad saves maximum activation layer |
@@ -18,3 +19,5 @@ Now with atom.io
 | PrepareSegmentations.py       | Reads through a leveldb of cliques and thresholds all patches and fills the resized segmentations accordingly |
 | RunPersonDetectionTest.py     | Runs directory through crf-rnn to detect persons and saves the heatmaps |
 | RunPersonDetectionTestHead.py | Runs RunPersonDetectionTest.py recursively for all folders |
+| surgery.py                    | Contains function to transplant weights into fcn (todo: merge with net_surgery) creds to shelhammer |
+| TestTrain.py                  | Transplant weights into fcn and train it |
