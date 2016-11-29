@@ -42,6 +42,7 @@ class OlympicDataLayer(caffe.Layer):
         # load image + label image pair
         self.data = self.load_image(self.paths[self.idx])
         self.label = self.load_label(self.paths[self.idx])
+        print self.paths[self.idx]
 
         if np.min([self.data.shape[1], self.data.shape[2]]) < 340:
             self.data = imresize(self.data, 2.0).transpose((2, 0, 1))
@@ -87,7 +88,7 @@ class OlympicDataLayer(caffe.Layer):
         return in_
 
     def load_label(self, path):
-        label = np.load(self.label_head + path + self.label_ext)  # .astype('uin16')
+        label = np.load(self.label_head + path + self.label_ext).astype('int')
         if self.label_factor != 1:
             label = downsample_segmentation(label, int(1/self.label_factor))
         label = label[np.newaxis, ...]
