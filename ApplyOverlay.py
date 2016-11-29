@@ -13,7 +13,7 @@ actdb = fcn_root + 'activationsDB'
 image_typ = 'png'
 orig_typ = 'jpg'
 
-fcn_put_in_middle = False
+fcn_put_in_middle = True
 
 image_factor = 0.25
 ##
@@ -26,16 +26,12 @@ import numpy as np
 import glob
 from scipy.misc import imsave, imread, imresize
 from PIL import Image
-from PIL import ImageFont
-from PIL import ImageDraw
 import matplotlib as mpl
 mpl.use('Agg')
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from progress.bar import Bar
 import shelve
-
-# GLOBAL VARIABLES
-font = ImageFont.load('./gohufont-14.pil')
 
 def pad_n_mv_into_im(im,ov):
     dovx = int(im.shape[0]-ov.shape[0])
@@ -60,10 +56,14 @@ def pad_n_mv_into_im(im,ov):
             ov = ov[:, :dovy]
     return ov
 
-def applyoverlay(im, overlay, path):
+
+def applyoverlay(im, overlay, path, label=''):
     fig = plt.figure(frameon=False)
     plt.imshow(im, interpolation='none')
-    plt.imshow(overlay, cmap='jet', alpha=0.7, interpolation='none')
+    plt.imshow(overlay, cmap='plasma', alpha=0.7, interpolation='none')
+    if label != '':
+        red_patch = mpatches.Patch(color='yellow', label=label)
+        plt.legend(handles=[red_patch])
     fig.savefig(path)
     plt.close(fig)
 
@@ -95,10 +95,6 @@ def applyoverlayfcn(list, factor=1):
     for path in paths:
         im = imread(im_root + path + orig_typ)
         idx = db[path]
-        im_ = Image.fromarray(im)
-        draw = ImageDraw.Draw(im_)
-        draw.text((10,10), str(idx), font=font)
-        im = np.array(im_)
         ov = imread(fcn_root + path + image_typ)
         if factor != 1:
             ov = imresize(ov, float(factor))
@@ -106,7 +102,7 @@ def applyoverlayfcn(list, factor=1):
         resdir = results_root + 'OlympicSports/fcn_overlays/' + path[:-8]
         if not os.path.exists(resdir):
             os.makedirs(resdir)
-        applyoverlay(im, ov, resdir + path[-8:] + 'png')
+        applyoverlay(im, ov, resdir + path[-8:] + 'png', str(idx))
         bar.next()
 
 
