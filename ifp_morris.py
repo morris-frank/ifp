@@ -4,6 +4,7 @@ import warnings
 import os
 import glob
 import shelve
+import random
 import numpy as np
 from scipy.misc import imsave, imread, imresize
 import matplotlib as mpl
@@ -17,6 +18,8 @@ import skimage.measure
 # CONFIGURATION
 DATA_ROOT = '../../data/OlympicSports/'
 RESULTS_ROOT = '../../results/OlympicSports/'
+
+PROTO_HEAD = './fcn/'
 
 CLIPS_ROOT = DATA_ROOT + 'clips/'
 BB_ROOT =  DATA_ROOT + 'bboxes/'
@@ -384,3 +387,28 @@ def apply_overlayfcn(listfile, factor=1):
             os.makedirs(resdir)
         apply_overlay(im, ov, resdir + path[-8:] + OUTPUT_DTYPE, str(idx))
         bar.next()
+
+
+def gen_test_train_files(sport, ratio=0.7):
+    """
+        Generate training and testing sets for a given sport
+    """
+    images = [x[len(CLIP_DTYPE):-3]
+        for x in glob(CLIP_DTYPE + sport + '/*/*' + CLIP_DTYPE)]
+    labels = [x[len(SEGMENTATION_ROOT):-3]
+        for x in glob(SEGMENTATION_ROOT + sport + '/*/*npy')]
+
+    files = list(set(labels) & set(images))
+    random.shuffle(files)
+
+    pivot = np.floor(len(files)*ratio).astype('uint16')
+    train = files[:pivot]
+    test  = files[pivot:]
+
+    ftrain = file(PROTO_HEAD + sport + '/train.txt', 'w')
+    ftrain.writelines( "%s\n" % item for item in train )
+    ftrain.close()
+
+    ftest = file(PROTO_HEAD + sport + '/test.txt', 'w')
+    ftest.writelines( "%s\n" % item for item in test )
+    ftest.close()
