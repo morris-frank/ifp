@@ -3,11 +3,13 @@ import getopt
 import warnings
 import os
 import glob
+import shelve
 import numpy as np
 from scipy.misc import imsave, imread, imresize
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from progress.bar import Bar
 import skimage.measure
 
@@ -23,6 +25,10 @@ PATCH_ROOT = DATA_ROOT + 'patches/'
 CRF_PATCH_ROOT = RESULTS_ROOT + 'patches/'
 CRF_PATCHED_IMAGE_ROOT = RESULTS_ROOT + 'applied_patches/'
 SEGMENTATION_ROOT = RESULTS_ROOT + 'segmentations/'
+OVERLAY_ROOT = RESULTS_ROOT + 'overlays/'
+FCN_OVERLAY_ROOT = RESULTS_ROOT + 'overlays_fcn/'
+FCN_ROOT = RESULTS_ROOT + 'fcn/'
+ACTDB = FCN_ROOT + 'activationsDB'
 
 OUTPUT_DTYPE = 'png'
 CLIP_DTYPE = 'jpg'
@@ -281,3 +287,100 @@ def downsample_segmentations(new_segmentation_root, factor):
                 np.save(new_segmentation_root + subpath, segmentation)
                 bar.next()
             print
+
+
+def pad_n_mv_into_im(image, overlay_, put_in_middle=False):
+    """
+        Pad the given overlay so it fits the size of the image
+    """
+    doverlay_x = int(image.shape[0]-overlay_.shape[0])
+    doverlay_y = int(image.shape[1]-overlay_.shape[1])
+    if doverlay_x == 0 and doverlay_y == 0:
+        return overlay_
+    doverlay_x2 = int(np.floor(doverlay_x/2))
+    doverlay_y2 = int(np.floor(doverlay_y/2))
+    if doverlay_x > 0:
+        overlay_ = np.pad(overlay_, ((doverlay_x2, doverlay_x2), (0, 0)), mode='edge')
+    elif doverlay_x < 0:
+        if put_in_middle:
+            overlay_ = overlay_[-doverlay_x2:doverlay_x2, :]
+        else:
+            overlay_ = overlay_[:doverlay_x, :]
+    if doverlay_y > 0:
+        overlay_ = np.pad(overlay_, ((0, 0), (doverlay_y2, doverlay_y2)), mode='edge')
+    elif doverlay_y < 0:
+        if put_in_middle:
+            overlay_ = overlay_[:, -doverlay_y:doverlay_y]
+        else:
+            overlay_ = overlay_[:, :doverlay_y]
+    return overlay_
+
+
+def apply_overlay(image, overlay, path, label=''):
+    """
+        Overlay overlay onto image and add label as text
+        and save to path (full path with extension!)
+    """
+    fig = plt.figure(frameon=False)
+    plt.imshow(image, interpolation='none')
+    plt.imshow(overlay, cmap='plasma', alpha=0.7, interpolation='none')
+    if label != '':
+        red_patch = mpatches.Patch(color='yellow', label=label)
+        plt.legend(handles=[red_patch])
+    fig.savefig(path)
+    plt.close(fig)
+
+
+def apply_overlaydir(inputdir, overlaydir):
+    """
+        Run apply_overlay for all images and overlays in the corresponding
+        directories.
+        E.g.:
+        inputdir = 'test/'
+        overlaydir = '../../results/test/'
+        applyoverlaydir(inputdir, overlaydir)
+    """
+    filelist = [os.path.basename(os.path.normpath(x))
+                for x in glob.glob(overlaydir + '*' + OUTPUT_DTYPE)]
+    filelist = np.sort(filelist)
+
+    if not os.path.exists(OVERLAY_ROOT + inputdir):
+        os.makedirs(OVERLAY_ROOT + inputdir)
+    else:
+        warnings.warn(
+            'The directory for the patched images already exists!', RuntimeWarning)
+
+    # Iterate over BoundingBoxes
+    bar = Bar(inputdir, max=len(filelist))
+    for imf in filelist:
+        im = imread(DATA_ROOT + inputdir + imf[:-len(IMAGE_TYP)] + ORIG_TYP)
+        overlay = imread(overlaydir + imf)
+        path = OVERLAY_ROOT + inputdir + imf[:-len(IMAGE_TYP)] + OUTPUT_DTYPE
+        apply_overlay(im, overlay, path)
+        bar.next()
+
+
+def apply_overlayfcn(listfile, factor=1):
+    """
+        Apply all overlays for the FCN results and load clique numbers
+        from activations database and add as labels, factor is how much smaller
+        the fcn outputs are...
+        E.g.
+        listfile = 'train.txt'
+        factor = 0.25
+    """
+    paths = open(listfile, 'r').read().splitlines()
+    db = shelve.open(ACTDB)
+    bar = Bar(list, max=len(paths))
+    for path in paths:
+        im = imread(CLIPS_ROOT + path + CLIP_DTYPE)
+        idx = db[path]
+        ov = imread(FCN_ROOT + path + OUTPUT_DTYPE)
+        if factor != 1:
+            ov = imresize(ov, float(factor))
+        ov = pad_n_mv_into_im(im, ov, put_in_middle=True)
+        resdir = FCN_ROOT + path[:-8]
+        if not os.path.exists(resdir):
+            os.makedirs(resdir)
+        apply_overlay(im, ov, resdir + path[-8:] + OUTPUT_DTYPE, str(idx))
+        bar.next()
