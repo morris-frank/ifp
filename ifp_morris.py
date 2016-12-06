@@ -6,6 +6,7 @@ import glob
 import shelve
 import random
 import numpy as np
+import scipy.io as sio
 from scipy.misc import imsave, imread, imresize
 import matplotlib as mpl
 mpl.use('Agg')
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from progress.bar import Bar
 import skimage.measure
+from PIL import Image as PILImage
 
 
 # CONFIGURATION
@@ -28,6 +30,7 @@ PATCH_ROOT = DATA_ROOT + 'patches/'
 CRF_PATCH_ROOT = RESULTS_ROOT + 'patches/'
 CRF_PATCHED_IMAGE_ROOT = RESULTS_ROOT + 'applied_patches/'
 SEGMENTATION_ROOT = RESULTS_ROOT + 'segmentations/'
+SEGMENTATION_PATCHES_ROOT = RESULTS_ROOT + 'segmentation_patches/'
 OVERLAY_ROOT = RESULTS_ROOT + 'overlays/'
 FCN_OVERLAY_ROOT = RESULTS_ROOT + 'overlays_fcn/'
 FCN_ROOT = RESULTS_ROOT + 'fcn/'
@@ -35,6 +38,7 @@ ACTDB = FCN_ROOT + 'activationsDB'
 
 OUTPUT_DTYPE = 'png'
 CLIP_DTYPE = 'jpg'
+SEG_DTYPE = 'npy'
 
 IGNORE_VALUE = -1
 SEGMENTATION_THRESHOLD = 150
@@ -96,6 +100,150 @@ def extract_patches_for_sport(sports):
         for vidd in vidlist:
             print sport + ': ' + vidd
             extract_patches(
+            sport + '/' + vidd + '/', sport + '/' + vidd + '.bb')
+
+
+def extract_patches_from_segmentation(inputdir, bbfile):
+    """
+        Extracts all bounding boxes from the bbfile and extracts all the
+        patches from the corresponding clip frames from the inputdir.
+        E.g:
+        inputdir = 'high_jump/bvV-s0nZjgI_05042_05264/'
+        bbfile = 'high_jump/bvV-s0nZjgI_05042_05264.bb'
+    """
+    # Read BoundingBox File
+    col_dtypes = np.dtype([('frame', 'uint16'), ('top', 'uint16'),
+                           ('left', 'uint16'), ('width', 'uint16'), ('height', 'uint16')])
+    bbmat = np.loadtxt(BB_ROOT + bbfile, dtype=col_dtypes)
+
+    # Get file list
+    filelist = [os.path.basename(x) for x in glob.glob(
+        SEGMENTATION_ROOT + inputdir + '*' + SEG_DTYPE)]
+    filelist = np.sort(filelist)
+
+    if len(filelist) < len(bbmat):
+        print len(filelist)
+        print len(bbmat)
+        raise RuntimeError(
+            'The BoundingBox File has more rows than images exist!')
+
+    if not os.path.exists(SEGMENTATION_PATCHES_ROOT + inputdir):
+        os.makedirs(SEGMENTATION_PATCHES_ROOT + inputdir)
+    else:
+        warnings.warn('The patch directory already exists!', RuntimeWarning)
+
+    # Iterate over BoundingBoxes
+    bar = Bar('extract_patches_from_segmentation:' + bbfile, max=len(bbmat))
+    for bb in bbmat:
+        # Read image
+        imf = filelist[bb[0] - 1]
+        im = np.load(SEGMENTATION_ROOT + inputdir + imf[:-len(CLIP_DTYPE)] + SEG_DTYPE).astype('int')
+
+        # Save patch
+        patch = im[bb[2]:bb[4], bb[1]:bb[3], :]
+        np.save(SEGMENTATION_PATCHES_ROOT + inputdir +
+               imf[:-len(CLIP_DTYPE)] + SEG_DTYPE, patch)
+        bar.next()
+
+
+def extract_patches_from_segmentation_for_sport(sports):
+    """
+        Runs the extract_patches_from_segmentation function for all videos found for the given
+        sports (list!).
+        Exp.:
+        apply_patches_for_sport(['long_jump'])
+    """
+    for sport in sports:
+        print "--------" + sport + "--------"
+        vidlist = [os.path.basename(os.path.normpath(x)) for x in glob.glob(
+        CLIPS_ROOT + sport + '/*')]
+        for vidd in vidlist:
+            print sport + ': ' + vidd
+            if not os.path.exists(BB_ROOT + sport + '/' + vidd + '.bb'):
+                print 'BB File doesn\' exist'
+                continue
+            extract_patches_from_segmentation(
+            sport + '/' + vidd + '/', sport + '/' + vidd + '.bb')
+
+
+def apply_patches_fcn(inputdir, bbfile):
+    """
+        Loads all bounding boxes from file bbfile and
+        applies all FCN patches already saved onto the frames found in inputdir.
+        Exp.:
+        inputdir = 'high_jump/bvV-s0nZjgI_05042_05264/'
+        bbfile = 'high_jump/bvV-s0nZjgI_05042_05264.bb'
+        apply_patches(inputdir, bbfile)
+    """
+    # Read BoundingBox File
+    col_dtypes = np.dtype([('frame', 'uint16'), ('top', 'uint16'),
+                           ('left', 'uint16'), ('width', 'uint16'), ('height', 'uint16')])
+    bbmat = np.loadtxt(BB_ROOT + bbfile, dtype=col_dtypes)
+
+    # Get file list
+    filelist = [os.path.basename(os.path.normpath(x)) for x in glob.glob(
+        FCN_ROOT + inputdir + '*' + OUTPUT_DTYPE)]
+    done_list = [os.path.basename(os.path.normpath(x)) for x in glob.glob(
+        FCN_OVERLAY_ROOT + inputdir + '*' + OUTPUT_DTYPE)]
+    filelist = list(set(filelist) - set(done_list))
+    filelist = np.sort(filelist)
+
+    if not os.path.exists(FCN_OVERLAY_ROOT + inputdir):
+        os.makedirs(FCN_OVERLAY_ROOT + inputdir)
+    else:
+        warnings.warn(
+            'The directory for the patched images already exists!', RuntimeWarning)
+
+    # Iterate over BoundingBoxes
+    bar = Bar('apply_patches_fcn' + bbfile, max=len(filelist))
+    db = shelve.open(ACTDB)
+    for imf in filelist:
+        im = imread(CLIPS_ROOT + inputdir +
+                    imf[:-len(OUTPUT_DTYPE)] + CLIP_DTYPE)
+        patch = imread(FCN_ROOT + inputdir + imf)
+        overlay = np.zeros((im.shape[0], im.shape[1]))
+        clique = db[inputdir + imf[:-3]]
+        # Get bounding box
+        idx = filter(lambda x: x.isdigit(), imf)
+        idx = int(idx)
+        try:
+            bb = bbmat[idx]
+        except Exception:
+            warnings.warn('More patches than bboxes', RuntimeWarning)
+            continue
+
+        #overlay[bb[2]:bb[4], bb[1]:bb[3], :] = 255-patch[:,:,np.newaxis]
+        try:
+            overlay[bb[2]:bb[4], bb[1]:bb[3]] = patch[:, :]
+        except Exception:
+            warnings.warn('patch not same size as in bb file', RuntimeWarning)
+            half_horiz = int(np.ceil(patch.shape[0] / 2))
+            half_vert = int(np.ceil(patch.shape[1] / 2))
+            pivot_horiz = int(np.floor((bb[4]+bb[2]) / 2))
+            pivot_vert = int(np.floor((bb[3]+bb[1]) / 2))
+            center_horiz = min(im.shape[0]-half_horiz, pivot_horiz)
+            center_vert = min(im.shape[1]-half_vert, pivot_vert)
+            overlay[center_horiz-half_horiz:center_horiz-half_horiz+patch.shape[0],
+                    center_vert-half_vert:center_vert-half_vert+patch.shape[1]] = patch[:, :]
+
+        apply_overlay(im, overlay, FCN_OVERLAY_ROOT + inputdir + imf, label=str(clique))
+        bar.next()
+
+
+def apply_patches_for_sport_fcn(sports):
+    """
+        Runs the apply_patches function for all videos found for the given
+        sports (list!).
+        Exp.:
+        apply_patches_for_sport([]'long_jump'])
+    """
+    for sport in sports:
+        print "--------" + sport + "--------"
+        vidlist = [os.path.basename(os.path.normpath(x)) for x in glob.glob(
+        CRF_PATCH_ROOT + sport + '/*')]
+        for vidd in vidlist:
+            print sport + ': ' + vidd
+            apply_patches_fcn(
             sport + '/' + vidd + '/', sport + '/' + vidd + '.bb')
 
 
@@ -187,69 +335,82 @@ def prepare_segmentation(subpath, boundingbox, clique):
         boundingbox = [x_0, x_1, y_0, y_1]
         clique = 244
     """
-    frame = imread(CLIPS_ROOT + subpath[:-3] + CLIP_DTYPE)
-
-    # Create segmentation image filled with ignore values
-    segmentation = np.full(
-        (frame.shape[0], frame.shape[1]), IGNORE_VALUE, dtype=int)
-
     # Read patch from crfasrnn
     patchseg = imread(CRF_PATCH_ROOT + subpath)
     # Threshold with global threshold
     patchseg = (patchseg > SEGMENTATION_THRESHOLD).astype(int, copy=False)
     # Fill segmentation with number of current clique
     patchseg[patchseg == True] = clique
-
-    try:
-        segmentation[boundingbox[2]:boundingbox[4],
-                     boundingbox[1]:boundingbox[3]] = patchseg[:, :]
-    except Exception:
-        warnings.warn('patch not same size as in bb file', RuntimeWarning)
-
-    if not os.path.exists(SEGMENTATION_ROOT + subpath[:-10]):
-        os.makedirs(SEGMENTATION_ROOT + subpath[:-10])
-
-    np.save(SEGMENTATION_ROOT + subpath[:-4], segmentation)
+    patchseg[patchseg == False] = IGNORE_VALUE
 
 
-def prepare_segmentations(cliquefile, sport):
+    if boundingbox:
+        frame = imread(CLIPS_ROOT + subpath[:-3] + CLIP_DTYPE)
+
+        # Create segmentation image filled with ignore values
+        segmentation = np.full(
+            (frame.shape[0], frame.shape[1]), IGNORE_VALUE, dtype=int)
+
+        try:
+            segmentation[boundingbox[2]:boundingbox[4],
+            boundingbox[1]:boundingbox[3]] = patchseg[:, :]
+        except Exception:
+            warnings.warn('patch not same size as in bb file', RuntimeWarning)
+    else:
+        segmentation = patchseg
+
+
+    if boundingbox:
+        if not os.path.exists(SEGMENTATION_ROOT + subpath[:-10]):
+            os.makedirs(SEGMENTATION_ROOT + subpath[:-10])
+        np.save(SEGMENTATION_ROOT + subpath[:-4], segmentation)
+    else:
+        if not os.path.exists(SEGMENTATION_PATCHES_ROOT + subpath[:-10]):
+            os.makedirs(SEGMENTATION_PATCHES_ROOT + subpath[:-10])
+        np.save(SEGMENTATION_PATCHES_ROOT + subpath[:-4], segmentation)
+
+
+def prepare_segmentations(cliquefile, sport, full=True):
     """
         Run prepare_segmentation for sport and its cliquefile.
         E.g:
         cliquefile = '/net/hciserver03/storage/mbautist/Desktop/workspace/cnn_similarities/data/cliques/cliques_leveldb/class_images_long_jump.mat'
-        bbfiles = 'long_jump'
+        sport = 'long_jump'
     """
     if not os.path.isfile(cliquefile):
         print cliquefile
         print "Cliquefile is not good, -.-"
         return
-    cliquemat = scipy.io.loadmat(cliquefile)
+    cliquemat = sio.loadmat(cliquefile)
     cliquemat = cliquemat['class_images']
     N = cliquemat.shape[1]
 
-    col_dtypes = np.dtype([('frame', 'uint16'), ('top', 'uint16'),
-                           ('left', 'uint16'), ('width', 'uint16'), ('height', 'uint16')])
-    bbfilelist = [os.path.basename(os.path.normpath(x))
-                  for x in glob.glob(BB_ROOT + sport + '/*bb')]
-    bbmats = dict()
-    patchlists = dict()
-    for bbfile in bbfilelist:
-        # Filename without extension
-        bbbase = bbfile[:-3]
-        bbmats[bbbase] = np.loadtxt(BB_ROOT + sport + '/' + bbfile, dtype=col_dtypes)
-        patchlists[bbbase] = [os.path.basename(os.path.normpath(x))
-            for x in glob.glob(CRF_PATCH_ROOT + sport + '/' + bbbase + '/*' + OUTPUT_DTYPE)]
+    if full:
+        col_dtypes = np.dtype([('frame', 'uint16'), ('top', 'uint16'),
+                            ('left', 'uint16'), ('width', 'uint16'), ('height', 'uint16')])
+        bbfilelist = [os.path.basename(os.path.normpath(x))
+                     for x in glob.glob(BB_ROOT + sport + '/*bb')]
+        bbmats = dict()
+        patchlists = dict()
+        for bbfile in bbfilelist:
+            # Filename without extension
+            bbbase = bbfile[:-3]
+            bbmats[bbbase] = np.loadtxt(BB_ROOT + sport + '/' + bbfile, dtype=col_dtypes)
+            patchlists[bbbase] = [os.path.basename(os.path.normpath(x))
+                                 for x in glob.glob(CRF_PATCH_ROOT + sport + '/' + bbbase + '/*' + OUTPUT_DTYPE)]
 
+    bar = Bar('prepare_segmentations for ' + sport, max=N)
     for n in range(0, N):
         cliquepatchpaths = cliquemat[0, n]
-        bar = Bar(n, max=len(cliquepatchpaths))
         for patchpath in cliquepatchpaths:
             patchpath = patchpath.split('/crops/', 1)[1]
-            video = patchpath.split('/')[1]
-            idx = patchlists[video].index(patchpath[-10:])
-            bbpos = bbmats[video][idx]
+            bbpos = False
+            if full:
+                video = patchpath.split('/')[1]
+                idx = patchlists[video].index(patchpath[-10:])
+                bbpos = bbmats[video][idx]
             prepare_segmentation(patchpath, bbpos, n)
-            bar.next()
+        bar.next()
 
 
 def maxpool_helper(box,axis=-1):
@@ -393,10 +554,10 @@ def gen_test_train_files(sport, ratio=0.7):
     """
         Generate training and testing sets for a given sport
     """
-    images = [x[len(CLIP_DTYPE):-3]
-        for x in glob(CLIP_DTYPE + sport + '/*/*' + CLIP_DTYPE)]
-    labels = [x[len(SEGMENTATION_ROOT):-3]
-        for x in glob(SEGMENTATION_ROOT + sport + '/*/*npy')]
+    images = [x[len(CLIPS_ROOT):-len(CLIP_DTYPE)]
+        for x in glob.glob(CLIPS_ROOT + sport + '/*/*' + CLIP_DTYPE)]
+    labels = [x[len(SEGMENTATION_ROOT):-len(SEG_DTYPE)]
+        for x in glob.glob(SEGMENTATION_ROOT + sport + '/*/*' + SEG_DTYPE)]
 
     files = list(set(labels) & set(images))
     random.shuffle(files)
@@ -412,3 +573,35 @@ def gen_test_train_files(sport, ratio=0.7):
     ftest = file(PROTO_HEAD + sport + '/test.txt', 'w')
     ftest.writelines( "%s\n" % item for item in test )
     ftest.close()
+
+
+def gen_test_train_files_patches(sport, ratio=0.7):
+    """
+        Generate training and testing sets for a given sport
+    """
+    images = [x[len(PATCH_ROOT):-len(OUTPUT_DTYPE)]
+        for x in glob.glob(PATCH_ROOT + sport + '/*/*' + OUTPUT_DTYPE)]
+    labels = [x[len(SEGMENTATION_PATCHES_ROOT):-len(SEG_DTYPE)]
+        for x in glob.glob(SEGMENTATION_PATCHES_ROOT + sport + '/*/*' + SEG_DTYPE)]
+
+    files = list(set(labels) & set(images))
+    random.shuffle(files)
+
+    pivot = np.floor(len(files)*ratio).astype('uint16')
+    train = files[:pivot]
+    test  = files[pivot:]
+
+    ftrain = file(PROTO_HEAD + sport + '/train.txt', 'w')
+    ftrain.writelines( "%s\n" % item for item in train )
+    ftrain.close()
+
+    ftest = file(PROTO_HEAD + sport + '/test.txt', 'w')
+    ftest.writelines( "%s\n" % item for item in test )
+    ftest.close()
+
+
+def loadim(path):
+    """
+        Loads an image and prepares it
+    """
+    im = PILImage.open(path, dtype=np.float32)
