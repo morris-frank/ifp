@@ -36,7 +36,7 @@ def deconv(name, bottom, nout, factor, weight_std, bias_val):
     deconv = L.Deconvolution(bottom, name=name,
         convolution_param=dict(kernel_size=ks, stride=factor,
             num_output=nout, pad=pad, bias_term=False,),
-        param=[dict(lr_mult=0, decay_mult=0)])
+        param=[dict(lr_mult=0.1, decay_mult=0)])
     return deconv
 
 
@@ -44,6 +44,7 @@ def BuildBaseNet(sport, depth, split):
     n = caffe.NetSpec()
 
     pydata_params = dict(split=split, mean=(103.939, 116.779, 123.68))
+    pydata_params['data_ext'] = 'png'
     if split == 'train':
         pydata_params['path_file'] = '/export/home/mfrank/src/ifp/fcn/'+sport+'/train.txt'
     elif split == 'test':
@@ -55,7 +56,7 @@ def BuildBaseNet(sport, depth, split):
     elif split == 'deploy':
         n.data = L.Input(name='input', shape=[dict(dim=[1,3,500,500])])
 
-    n.conv1 = conv('conv1', n.data, 96, 11, 4)
+    n.conv1 = conv('conv1', n.data, 96, 11, 4, 100)
     n.relu1 = L.ReLU(n.conv1, name='relu1', in_place=True)
     n.norm1 = L.LRN(n.relu1, name='norm1', local_size=5, alpha=0.0001, beta=0.75)
     n.pool1 = L.Pooling(n.norm1, name='pool1', kernel_size=3, stride=2, pool=P.Pooling.MAX)
@@ -77,7 +78,7 @@ def BuildBaseNet(sport, depth, split):
 
     n.conv6 = L.Convolution(n.pool5, name='fc6-conv', kernel_size=6, num_output=4096,
                 weight_filler=dict(type='gaussian', std=0.005), bias_filler=dict(type='constant', value=0.1),
-                param=[dict(name='fc6_w', lr_mult=0.0, decay_mult=1), dict(name='fc6_b', lr_mult=0.0, decay_mult=0)])
+                param=[dict(name='fc6_w', lr_mult=0.5, decay_mult=1), dict(name='fc6_b', lr_mult=0.0, decay_mult=0)])
 
     n.relu6 = L.ReLU(n.conv6, name='relu6', in_place=False)
     trailing = n.relu6
@@ -85,7 +86,7 @@ def BuildBaseNet(sport, depth, split):
         n.drop6 = L.Dropout(n.relu6, name='drop6', dropout_ratio=0.5, in_place=True)
         trailing = n.drop6
 
-    n.conv7 = L.Convolution(trailing, name='fc7_-conv', kernel_size=1, num_output=4096,
+    n.conv7 = L.Convolution(trailing, name='fc7-conv', kernel_size=1, num_output=4096,
                 weight_filler=dict(type='gaussian', std=0.005), bias_filler=dict(type='constant', value=0.1),
                 param=[dict(name='fc7__w', lr_mult=1, decay_mult=1), dict(name='fc7__b', lr_mult=1, decay_mult=1)])
     n.relu7 = L.ReLU(n.conv7, name='relu7', in_place=False)
@@ -94,7 +95,7 @@ def BuildBaseNet(sport, depth, split):
         n.drop7 = L.Dropout(n.relu7, name='drop7', dropout_ratio=0.5, in_place=True)
         trailing = n.drop7
 
-    n.conv8 = L.Convolution(trailing, name='fc8_output-conv', kernel_size=1, num_output=depth,
+    n.conv8 = L.Convolution(trailing, name='fc8-score', kernel_size=1, num_output=depth,
             weight_filler=dict(type='gaussian', std=0.01), bias_filler=dict(type='constant', value=0),
             param=[dict(name='fc8_output_w', lr_mult=1, decay_mult=1), dict(name='fc8_output_b', lr_mult=1, decay_mult=1)])
     return n
@@ -119,7 +120,7 @@ def BuildNet(sport, depth, split, version):
     elif version=='learnedmiddle':
         n.deconv1 = deconv('deconv1', last, depth, 4, 0.01, 0)
         n.deconv2 = deconv('deconv2', n.deconv1, depth, 4, 0.01, 0)
-        n.deconv3 = deconv('deconv3', n.deconv2, depth, 1, 0.01, 0)
+        n.deconv3 = deconv('deconv3', n.deconv2, depth, 2, 0.01, 0)
         last = n.deconv3
     elif version=='learnedsmall':
         n.deconv1 = deconv('deconv1', last, depth, 4, 0.01, 0)
@@ -151,7 +152,7 @@ def BuildNet(sport, depth, split, version):
 def main(argv):
     sport = 'long_jump'
     depth = 468
-    ver = 'learnedsmall'
+    ver = 'learnedmiddle'
     base = './fcn/'+sport+'/'
     proto = BuildNet(sport,depth,'train',ver)
     with open(base+'train.prototxt', 'w') as f:

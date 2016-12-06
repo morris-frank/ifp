@@ -82,7 +82,7 @@ def perform_surgery(inp_proto, inp_model, fcn_proto, fcn_model):
 
     # Load the fully convolutional network to transplant the parameters.
     net_full_conv = caffe.Net(fcn_proto, inp_model, state)
-    params_full_conv = ['fc6-conv', 'fc7_-conv', 'fc8_output-conv']
+    params_full_conv = ['fc6-conv', 'fc7-conv', 'fc8-score']
 
     # conv_params = {name: (weights, biases)}
     conv_params = {pr: (net_full_conv.params[pr][0].data, net_full_conv.params[
@@ -109,10 +109,10 @@ def main(argv):
     sport = 'long_jump'
 
     inp_proto = model_root + 'snapshots/' + sport + '/net_config/deploy.prototxt'
-    fcn_proto = './fcn/' + sport + '/train_test.prototxt'
+    fcn_proto = './fcn/' + sport + '/train.prototxt'
 
     inp_model = model_root + 'snapshots/' + sport + '/snap_iter_30000.caffemodel'
-    fcn_model = model_root + 'fcn/' + sport + '/snap_iter_30000.train.caffemodel'
+    fcn_model = model_root + 'fcn/' + sport + '/original.caffemodel'
 
     #pre_transplant(inp_proto, inp_model, fcn_proto, fcn_model)
     perform_surgery(inp_proto, inp_model, fcn_proto, fcn_model)

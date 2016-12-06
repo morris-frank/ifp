@@ -5,14 +5,17 @@ import random
 from PIL import Image
 from os.path import normpath, basename
 from scipy.misc import imresize
-from DownsampleSegmentations import downsample_segmentation
+from ifp_morris import downsample_segmentation
 
 
 class OlympicDataLayer(caffe.Layer):
     im_factor = 1.0
-    label_factor = 0.25
-    im_head = '/export/home/mfrank/data/OlympicSports/clips/'
-    label_head = '/export/home/mfrank/results/OlympicSports/segmentations/'
+    #label_factor = 0.25
+    label_factor = 0.5
+    # im_head = '/export/home/mfrank/data/OlympicSports/clips/'
+    # label_head = '/export/home/mfrank/results/OlympicSports/segmentations/'
+    im_head = '/export/home/mfrank/data/OlympicSports/patches/'
+    label_head = '/export/home/mfrank/results/OlympicSports/segmentation_patches/'
 
     def setup(self, bottom, top):
         print 'Setting up the OlympicDataLayer...'
@@ -38,19 +41,20 @@ class OlympicDataLayer(caffe.Layer):
         self.paths = open(self.path_file, 'r').read().splitlines()
         self.idx = 0
 
+
     def reshape(self, bottom, top):
         # load image + label image pair
         self.data = self.load_image(self.paths[self.idx])
         self.label = self.load_label(self.paths[self.idx])
-        print self.paths[self.idx]
 
-        if np.min([self.data.shape[1], self.data.shape[2]]) < 340:
-            self.data = imresize(self.data, 2.0).transpose((2, 0, 1))
-            self.label = self.label.repeat(2, axis=1).repeat(2, axis=2)
+        # while np.min([self.data.shape[1], self.data.shape[2]]) < 340:
+        #     self.data = imresize(self.data, 2.0).transpose((2, 0, 1))
+        #     self.label = self.label.repeat(2, axis=1).repeat(2, axis=2)
 
         # reshape tops to fit (leading 1 is for batch dimension)
         top[0].reshape(1, *self.data.shape)
         top[1].reshape(1, *self.label.shape)
+
 
     def forward(self, bottom, top):
         # assign output
@@ -65,8 +69,10 @@ class OlympicDataLayer(caffe.Layer):
             if self.idx == len(self.paths):
                 self.idx = 0
 
+
     def backward(self, top, propagate_down, bottom):
         pass
+
 
     def load_image(self, path):
         """
@@ -86,6 +92,7 @@ class OlympicDataLayer(caffe.Layer):
         in_ -= self.mean
         in_ = in_.transpose((2, 0, 1))
         return in_
+
 
     def load_label(self, path):
         label = np.load(self.label_head + path + self.label_ext).astype('int')

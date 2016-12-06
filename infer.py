@@ -1,4 +1,3 @@
-caffe_root = '../../lib/caffe/'
 model_root = '../../model/'
 data_root = '../../data/'
 results_root = '../../results/'
@@ -10,15 +9,14 @@ from PIL import Image
 from scipy.misc import imsave, imread
 import sys
 import getopt
-sys.path.insert(0, caffe_root + 'python')
+sys.path.insert(0, '../../lib/caffe/python')
 import caffe
 import os
 import site
 site.addsitedir('./oylmpic_layer')
 from progress.bar import Bar
 import shelve
-from ApplyOverlay import applyoverlayfcn
-
+import ifp_morris
 
 def loadim(path):
     im = Image.open(path)
@@ -38,11 +36,11 @@ def inferfile(net, path_file, im_head):
 
     bar = Bar(path_file, max=len(paths))
     for path in paths:
-        in_ = loadim(im_head + path + 'jpg')
+        in_ = loadim(im_head + path + 'png')
         net.blobs['data'].reshape(1, *in_.shape)
         net.blobs['data'].data[...] = in_
         net.forward()
-        out = net.blobs['deconv2'].data[0]
+        out = net.blobs['deconv3'].data[0]
         maxidx = np.argmax(np.sum(out, axis=(1,2)))
         db[path] = maxidx
         db.sync()
@@ -57,25 +55,29 @@ def inferfile(net, path_file, im_head):
 
 def main(argv):
     sport = 'long_jump'
-    model = 'snap_iter_100000.caffemodel'
+    model = 'snap_iter_50000.caffemodel'
     #---
     weights = model_root + 'fcn/' + sport + '/' + model
     netf = './fcn/' + sport + '/deploy.prototxt'
 
-    gpu = 1
+    gpu = 0
     caffe.set_device(gpu)
     caffe.set_mode_gpu()
 
     net = caffe.Net(netf, weights, caffe.TEST)
     im_head = '/export/home/mfrank/data/OlympicSports/clips/'
+    im_head = '/export/home/mfrank/data/OlympicSports/patches/'
     test_path_file = 'fcn/' + sport + '/test.txt'
     train_path_file = 'fcn/' + sport + '/train.txt'
 
-    inferfile(net, test_path_file, im_head)
-    applyoverlayfcn(test_path_file, factor=4)
+    inferfile(net, train_path_file, im_head)
+    ifp_morris.apply_overlayfcn(train_path_file, factor=4)
 
-    # inferfile(net, train_path_file, im_head)
-    # applyoverlayfcn(train_path_file, factor=4)
+    inferfile(net, test_path_file, im_head)
+    ifp_morris.apply_overlayfcn(test_path_file, factor=4)
+
+
+
 
 
 

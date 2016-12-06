@@ -24,7 +24,7 @@ site.addsitedir('./oylmpic_layer')
 sport = 'long_jump'
 gpu = 0
 
-weights = model_root + 'fcn/' + sport + '/snap_iter_30000.train.caffemodel'
+weights = model_root + 'fcn/' + sport + '/original.caffemodel'
 solverf = './fcn/' + sport + '/solver.prototxt'
 
 caffe.set_device(gpu)
