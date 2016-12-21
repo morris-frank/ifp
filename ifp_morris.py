@@ -223,8 +223,12 @@ def apply_patches_fcn(inputdir, bbfile):
             pivot_vert = int(np.floor((bb[3]+bb[1]) / 2))
             center_horiz = min(im.shape[0]-half_horiz, pivot_horiz)
             center_vert = min(im.shape[1]-half_vert, pivot_vert)
-            overlay[center_horiz-half_horiz:center_horiz-half_horiz+patch.shape[0],
-                    center_vert-half_vert:center_vert-half_vert+patch.shape[1]] = patch[:, :]
+            try:
+                overlay[center_horiz-half_horiz:center_horiz-half_horiz+patch.shape[0],
+                        center_vert-half_vert:center_vert-half_vert+patch.shape[1]] = patch[:, :]
+            except Exception:
+                warnings.warn('still not fitting ... give up')
+                continue
 
         apply_overlay(im, overlay, FCN_OVERLAY_ROOT + inputdir + imf, label=str(clique))
         bar.next()
@@ -263,7 +267,7 @@ def apply_patches(inputdir, bbfile):
 
     # Get file list
     filelist = [os.path.basename(os.path.normpath(x)) for x in glob.glob(
-        CRF_PATCH_ROOT + inputdir + '*' + CLIP_DTYPE)]
+        CRF_PATCH_ROOT + inputdir + '*' + OUTPUT_DTYPE)]
     done_list = [os.path.basename(os.path.normpath(x)) for x in glob.glob(
         CRF_PATCHED_IMAGE_ROOT + inputdir + '*' + OUTPUT_DTYPE)]
     filelist = list(set(filelist) - set(done_list))
@@ -279,7 +283,7 @@ def apply_patches(inputdir, bbfile):
     bar = Bar('apply_patches' + bbfile, max=len(filelist))
     for imf in filelist:
         im = imread(CLIPS_ROOT + inputdir +
-                    imf[:-len(CLIP_DTYPE)] + CLIP_DTYPE)
+                    imf[:-len(OUTPUT_DTYPE)] + CLIP_DTYPE)
         patch = imread(CRF_PATCH_ROOT + inputdir + imf)
         overlay = np.zeros((im.shape[0], im.shape[1]))
 
@@ -301,11 +305,12 @@ def apply_patches(inputdir, bbfile):
 
         fig = plt.figure(frameon=False)
         plt.imshow(im, interpolation='none')
-        plt.imshow(overlay, cmap='jet', alpha=0.7, interpolation='none')
+        plt.imshow(overlay, cmap='plasma', alpha=0.7, interpolation='nearest')
+        plt.axis('off')
         fig.savefig(CRF_PATCHED_IMAGE_ROOT +
-                    inputdir + imf[:-len(CLIP_DTYPE)] + OUTPUT_DTYPE)
+                    inputdir + imf[:-len(CLIP_DTYPE)] + OUTPUT_DTYPE,
+                    bbox_inches='tight')
         plt.close(fig)
-        print imf
         bar.next()
 
 
@@ -507,7 +512,6 @@ def apply_overlaydir(inputdir, overlaydir):
     filelist = [os.path.basename(os.path.normpath(x))
                 for x in glob.glob(overlaydir + '*' + OUTPUT_DTYPE)]
     filelist = np.sort(filelist)
-
     if not os.path.exists(OVERLAY_ROOT + inputdir):
         os.makedirs(OVERLAY_ROOT + inputdir)
     else:
@@ -517,9 +521,9 @@ def apply_overlaydir(inputdir, overlaydir):
     # Iterate over BoundingBoxes
     bar = Bar(inputdir, max=len(filelist))
     for imf in filelist:
-        im = imread(DATA_ROOT + inputdir + imf[:-len(IMAGE_TYP)] + ORIG_TYP)
+        im = imread(DATA_ROOT + inputdir + imf[:-len(OUTPUT_DTYPE)] + CLIP_DTYPE)
         overlay = imread(overlaydir + imf)
-        path = OVERLAY_ROOT + inputdir + imf[:-len(IMAGE_TYP)] + OUTPUT_DTYPE
+        path = OVERLAY_ROOT + inputdir + imf[:-len(CLIP_DTYPE)] + OUTPUT_DTYPE
         apply_overlay(im, overlay, path)
         bar.next()
 

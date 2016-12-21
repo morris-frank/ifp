@@ -3,7 +3,7 @@
 
 # CONFIGURATION
 data_root = '../../data/'
-data_rel = 'OlympicSports/patches/'
+data_rel = 'OlympicSports/clips/'
 ##
 
 import sys
@@ -26,7 +26,7 @@ def main(argv):
         for vidd in vidlist:
             print sport + ': ' + vidd
             RunPersonDetectionTest.run_persondetectiontest(
-                data_rel + sport + '/' + vidd + '/', '', 0)
+                data_rel + sport + '/' + vidd + '/', 'wholeimages', 0)
 
 
 if __name__ == "__main__":

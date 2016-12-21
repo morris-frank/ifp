@@ -8,7 +8,7 @@ results_root = '../../results/'
 MODEL_FILE = model_root + 'TVG_CRFRNN_new_deploy_unary.prototxt'
 PRETRAINED = model_root + 'TVG_CRFRNN_COCO_VOC.caffemodel'
 
-image_typ = 'png'
+image_typ = 'jpg'
 
 maxsize = 227
 
@@ -114,7 +114,7 @@ def run_persondetectiontest(inputdir, outputdir, gpudevice):
         if maxDim > maxsize:
             output_im = imresize(output_im, (width, height))
 
-        imsave(results_root + outputdir + inputdir + filename, output_im)
+        imsave(results_root + outputdir + inputdir + filename[:-3] + 'png', output_im)
 
 
 def main(argv):
